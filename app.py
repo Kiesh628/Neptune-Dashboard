@@ -223,6 +223,10 @@ def render_master_view(metrics):
             elif sort_completed == "Trial ID": 
                 comp_data.sort(key=lambda x: x['trial_id'], reverse=True)
             
+            # Slice to top 30 to prevent massive Streamlit UI lag
+            comp_data = comp_data[:30]
+            st.caption(f"Showing top {len(comp_data)} completed trials")
+            
             for dat in comp_data:
                 tid = int(dat['trial_id'])
                 stall_t = dat.get('stall_temp')
