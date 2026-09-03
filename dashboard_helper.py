@@ -93,9 +93,16 @@ def get_all_completed_data_cached() -> list[dict]:
 @st.cache_data(ttl=600)
 def get_completed_trial_csv(trial_id: int) -> pd.DataFrame | None:
     import time
+    import sys
     t0 = time.time()
+    
+    sys.__stdout__.write(f"[Timer] Starting to fetch trial {trial_id}\n")
+    sys.__stdout__.flush()
+    
     file_map = get_ids_from_drive()
-    print(f"[Timer] file_map retrieved in {time.time()-t0:.2f}s")
+    sys.__stdout__.write(f"[Timer] file_map retrieved in {time.time()-t0:.2f}s\n")
+    sys.__stdout__.flush()
+    
     if trial_id not in file_map:
         return None
         
@@ -107,24 +114,30 @@ def get_completed_trial_csv(trial_id: int) -> pd.DataFrame | None:
         service = get_drive_service()
         creds = service._http.credentials
         
-        if not creds.valid:
-            import google.auth.transport.requests
-            creds.refresh(google.auth.transport.requests.Request())
-        print(f"[Timer] credentials prepped in {time.time()-t1:.2f}s")
+        sys.__stdout__.write(f"[Timer] credentials prepped in {time.time()-t1:.2f}s. Requesting GDrive...\n")
+        sys.__stdout__.flush()
             
         t2 = time.time()
         url = f"https://www.googleapis.com/drive/v3/files/{file_map[trial_id]}?alt=media"
-        headers = {"Authorization": f"Bearer {creds.token}"}
-        resp = requests.get(url, headers=headers)
-        resp.raise_for_status()
-        print(f"[Timer] Downloaded {len(resp.content)} bytes via requests in {time.time()-t2:.2f}s")
+        
+        # Use the Google API's internal http client which auto-refreshes tokens!
+        response, content = service._http.request(url, method="GET")
+        if response.status != 200:
+            raise Exception(f"HTTP {response.status}: {content}")
+        
+        sys.__stdout__.write(f"[Timer] Downloaded {len(content)} bytes in {time.time()-t2:.2f}s. Parsing...\n")
+        sys.__stdout__.flush()
         
         t3 = time.time()
-        df = pd.read_parquet(io.BytesIO(resp.content))
-        print(f"[Timer] Parsed parquet dataframe of length {len(df)} in {time.time()-t3:.2f}s. TOTAL: {time.time()-t0:.2f}s")
+        df = pd.read_parquet(io.BytesIO(content))
+        
+        sys.__stdout__.write(f"[Timer] Parsed length {len(df)} in {time.time()-t3:.2f}s. TOTAL: {time.time()-t0:.2f}s\n")
+        sys.__stdout__.flush()
+        
         return df
     except Exception as e:
-        print(f"Error downloading Parquet for Trial {trial_id}: {e}")
+        sys.__stdout__.write(f"Error downloading Parquet for Trial {trial_id}: {e}\n")
+        sys.__stdout__.flush()
         return None
 
 @st.cache_data(ttl=2)
