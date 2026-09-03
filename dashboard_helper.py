@@ -92,7 +92,10 @@ def get_all_completed_data_cached() -> list[dict]:
 
 @st.cache_data(ttl=600)
 def get_completed_trial_csv(trial_id: int) -> pd.DataFrame | None:
+    import time
+    t0 = time.time()
     file_map = get_ids_from_drive()
+    print(f"[Timer] file_map retrieved in {time.time()-t0:.2f}s")
     if trial_id not in file_map:
         return None
         
@@ -100,21 +103,26 @@ def get_completed_trial_csv(trial_id: int) -> pd.DataFrame | None:
         from infra.gdrive import get_drive_service
         import requests
         
+        t1 = time.time()
         service = get_drive_service()
         creds = service._http.credentials
         
-        # Ensure token is fresh
         if not creds.valid:
             import google.auth.transport.requests
             creds.refresh(google.auth.transport.requests.Request())
+        print(f"[Timer] credentials prepped in {time.time()-t1:.2f}s")
             
-        # Download directly via HTTP to maximize speed and bypass chunking overhead
+        t2 = time.time()
         url = f"https://www.googleapis.com/drive/v3/files/{file_map[trial_id]}?alt=media"
         headers = {"Authorization": f"Bearer {creds.token}"}
         resp = requests.get(url, headers=headers)
         resp.raise_for_status()
+        print(f"[Timer] Downloaded {len(resp.content)} bytes via requests in {time.time()-t2:.2f}s")
         
-        return pd.read_parquet(io.BytesIO(resp.content))
+        t3 = time.time()
+        df = pd.read_parquet(io.BytesIO(resp.content))
+        print(f"[Timer] Parsed parquet dataframe of length {len(df)} in {time.time()-t3:.2f}s. TOTAL: {time.time()-t0:.2f}s")
+        return df
     except Exception as e:
         print(f"Error downloading Parquet for Trial {trial_id}: {e}")
         return None
