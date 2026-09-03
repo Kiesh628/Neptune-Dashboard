@@ -128,7 +128,7 @@ def get_completed_trials_file_map() -> dict[int, str]:
         items = []
         page_token = None
         while True:
-            results = service.files().list(q=query, fields="nextPageToken, files(id, name)", pageToken=page_token).execute()
+            results = service.files().list(q=query, fields="nextPageToken, files(id, name)", pageToken=page_token, pageSize=1000).execute()
             items.extend(results.get('files', []))
             page_token = results.get('nextPageToken')
             if not page_token:

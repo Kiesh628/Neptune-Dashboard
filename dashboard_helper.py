@@ -90,22 +90,31 @@ def get_all_completed_data_cached() -> list[dict]:
     
     return final_df.to_dict(orient='records')
 
+@st.cache_data(ttl=600)
 def get_completed_trial_csv(trial_id: int) -> pd.DataFrame | None:
     file_map = get_ids_from_drive()
     if trial_id not in file_map:
         return None
         
     try:
+        from infra.gdrive import get_drive_service
+        import requests
+        
         service = get_drive_service()
-        request = service.files().get_media(fileId=file_map[trial_id])
-        file_stream = io.BytesIO()
-        downloader = MediaIoBaseDownload(file_stream, request)
-        done = False
-        while not done:
-            status, done = downloader.next_chunk()
+        creds = service._http.credentials
+        
+        # Ensure token is fresh
+        if not creds.valid:
+            import google.auth.transport.requests
+            creds.refresh(google.auth.transport.requests.Request())
             
-        file_stream.seek(0)
-        return pd.read_parquet(file_stream)
+        # Download directly via HTTP to maximize speed and bypass chunking overhead
+        url = f"https://www.googleapis.com/drive/v3/files/{file_map[trial_id]}?alt=media"
+        headers = {"Authorization": f"Bearer {creds.token}"}
+        resp = requests.get(url, headers=headers)
+        resp.raise_for_status()
+        
+        return pd.read_parquet(io.BytesIO(resp.content))
     except Exception as e:
         print(f"Error downloading Parquet for Trial {trial_id}: {e}")
         return None
@@ -130,7 +139,9 @@ def get_live_telemetry_history(trial_id: int, time_window_sec: float | None = No
     return df
 
 
+@st.cache_data(ttl=60)
 def get_ids_from_drive() -> dict:
+    from infra.gdrive import get_completed_trials_file_map
     return get_completed_trials_file_map()
 
 def get_study_metrics() -> dict:
