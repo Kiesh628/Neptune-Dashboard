@@ -122,9 +122,12 @@ def render_completed_detail(trial_id):
     st.markdown("### 3D Regenerator Fields")
     tab1, tab2, tab3, tab4 = st.tabs(["Gas Temperature", "Solid Temperature", "Pressure Field", "Velocity Field"])
     
+    # Downsample for 3D surfaces to prevent freezing the frontend via massive JSON serialization
+    df_3d = df.iloc[::max(1, len(df) // 300)]
+    
     def create_surface(cols, z_title):
         if not cols: return None
-        fig = go.Figure(data=[go.Surface(z=df[cols].values, x=np.linspace(0, 1, len(cols)), y=df['Time'].values, colorscale='Plasma')])
+        fig = go.Figure(data=[go.Surface(z=df_3d[cols].values, x=np.linspace(0, 1, len(cols)), y=df_3d['Time'].values, colorscale='Plasma')])
         fig.update_layout(scene=dict(xaxis_title='Position', yaxis_title='Time (s)', zaxis_title=z_title), height=600)
         return fig
 
